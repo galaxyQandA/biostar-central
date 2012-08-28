@@ -77,7 +77,7 @@ code {
 .navbar .brand {
     text-indent:8px;
     margin-left:0px;
-    background-image: url(/static/img/g/star.png);
+    background-image: url(/static/img/g/logo.png);
     background-repeat: no-repeat;
     background-position: 0px 4px;
 }
@@ -121,10 +121,10 @@ div .par {
     background-color: #ECECEC;
     border-bottom: 1px solid #BBB;
     border-right: 1px solid #BBB;
-    color: #6B3E4A;
+    color: #2C3143;
     &:hover{
         color:white;
-        background-color:#6B3E4A;
+        background-color:#2C3143;
         text-decoration: none;
     }  
 }
@@ -152,7 +152,7 @@ div .par {
             text-decoration: none;
         }
         color:white;
-        background-color:#6B3E4A;
+        background-color:#2C3143;
     }
 }
 
@@ -292,7 +292,7 @@ td {
     }
 }
 
-@navbar-color:#8F2C47;
+@navbar-color:#2C3143;
 
 .unanswered {
     background-color: @navbar-color;
@@ -377,7 +377,7 @@ td {
   background-image: -o-linear-gradient(top, @navbar-color, @navbar-color-darker);
   background-image: linear-gradient(top, @navbar-color, @navbar-color-darker);
   background-repeat: repeat-x;
-  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#333333', endColorstr='#222222', GradientType=0);
+  filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#2C3143', endColorstr='#2C3143', GradientType=0);
   -webkit-border-radius: 4px;
   -moz-border-radius: 4px;
   border-radius: 4px;
@@ -459,7 +459,7 @@ td {
 
 .nav-pills .active > a, .nav-pills .active > a:hover {
     color: white;
-    background-color: #8F2C47;
+    background-color: #2C3143;
 }
 
 .lastedit {
