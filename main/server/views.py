@@ -375,7 +375,7 @@ def new_answer(request, pid):
     return new_post(request=request, pid=pid, post_type=POST_ANSWER)
     
 @login_required(redirect_field_name='/openid/login/')
-def new_post(request, pid=0, post_type=POST_QUESTION):
+def new_post(request, pid=0, post_type=POST_QUESTION, tag_name=None):
     "Handles the creation of a new post"
     
     user   = request.user
@@ -389,7 +389,7 @@ def new_post(request, pid=0, post_type=POST_QUESTION):
     
     if request.method == 'GET':
         # no incoming data, render form
-        form = factory()
+        form = factory(initial=dict(tag_val=tag_name))
         return html.template(request, name=name, form=form, params=params)
     
     # process the incoming data

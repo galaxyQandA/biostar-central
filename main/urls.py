@@ -66,6 +66,8 @@ urlpatterns = patterns('main.server',
     
     # handles new post
     url(r'^new/post/$','views.new_post', name="new-post"),
+    url(r'^new/post/tagged/(?P<tag_name>.+)/$', 'views.new_post', name="new-post"),
+
     url(r'^new/answer/(?P<pid>\d+)/$','views.new_answer', name="new-answer"),
     url(r'^new/comment/(?P<pid>\d+)/$','views.new_comment', name="new-comment"),
     
