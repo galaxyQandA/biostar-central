@@ -18,7 +18,7 @@ urlpatterns = patterns('main.server',
     url(r'^more/like/(?P<pid>\d+)/$', 'search.more', name="more"),
     
     # show by content type
-    url(r'^show/(?P<target>\w+)/$', 'views.index', name="show"),
+    url(r'^show/(?P<tab>\w+)/$', 'views.index', name="show"),
     
     # show tagged posts
     url(r'^show/tag/(?P<tag_name>.+)/$', 'views.show_tag', name="show-tag"),
@@ -26,7 +26,7 @@ urlpatterns = patterns('main.server',
     # show posts by user
     url(r'^show/user/(?P<uid>\d+)/$', 'views.show_user', name="show-user"),
     url(r'^show/user/(?P<uid>\d+)/(?P<post_type>\w+)/$', 'views.show_user', name="show-user-content"),
-    url(r'^show/blog/(?P<pid>\d+)/$', 'views.blog_redirect', name="blog-redirect"),
+    url(r'^linkout/(?P<pid>\d+)/$', 'views.linkout', name="linkout"),
     
     # urls for the navigation bar
     url(r'^tag/list/$', 'views.tag_list', name="tag-list"),
@@ -51,10 +51,14 @@ urlpatterns = patterns('main.server',
     url(r'^revision/show/(?P<pid>\d+)/$', 'views.revision_show', name="revision-show"),
 
     # post handlers with or withouth a slug
+    url(r'^p/(?P<pid>\d+)/$', 'views.post_show', name="post-short-show"),
     url(r'^post/show/(?P<pid>\d+)/$', 'views.post_show', name="post-show"),
     url(r'^post/show/(?P<pid>\d+)/([-\w]+)/$', 'views.post_show', name="post-show-slug"),
     url(r'^post/redirect/(?P<pid>\d+)/$', 'views.post_redirect', name="post-redirect"),
     
+    # turned off reparenting for now
+    #url(r'^post/reparent/(?P<pid>\d+)/$', 'action.post_reparent', name="post-reparent"),
+
     # editing an existing post/answer/comment
     url(r'^post/edit/(?P<pid>\d+)/$','views.post_edit', name="post-edit"),
     
@@ -63,6 +67,7 @@ urlpatterns = patterns('main.server',
     url(r'^post/moderate/(?P<pid>\d+)/(?P<status>\w+)/$','action.post_moderate', name="post-moderate"),
     url(r'^merge/$','action.request_merge', name="request-merge"),
     url(r'^approve_merge/(?P<master_id>\d+)/(?P<remove_id>\d+)/$','action.approve_merge', name="approve-merge"),
+    url(r'^request/info/(?P<pid>\d+)/$','pages.request_info', name="request-info"),
     
     # handles new post
     url(r'^new/post/$','views.new_post', name="new-post"),
@@ -92,13 +97,17 @@ urlpatterns = patterns('main.server',
     url(r'^note/clear/(?P<uid>\d+)/$','action.note_clear', name="note-clear"),
    
     # redirecting to new post
+    url(r'^questions/(?P<pid>\d+)/$','action.redirect_post', name="redirect-short"),
     url(r'^questions/(?P<pid>\d+)/([-\w]+)/$','action.redirect_post', name="redirect-post"),
     url(r'^questions/tagged/(?P<tag>.+)/$','action.redirect_tag', name="redirect-tag"),
 
     # test login, used during debugging
     url(r'^test/login/(?P<uid>\d+)/(?P<token>[\w\d]+)/$','action.test_login', name="test-login"),
    
-   
+    # json api for stat generation
+    url(r'^api/traffic/$', 'action.traffic', name='stats-traffic'),
+    url(r'^api/stats/$', 'action.stats', name='stats-short'),
+    url(r'^api/stats/(?P<days>\d+)/$', 'action.stats', name='stats'),
 )
 
 

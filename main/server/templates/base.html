@@ -5,7 +5,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>{% block title %}BioStar{% endblock %}</title>
+    <title>{% block title %}Bioinformatics Answers on BioStar{% endblock %}</title>
     <meta name="description" content="">
     <meta name="author" content="">
     <link href="/static/favicon.ico" rel="icon" type="image/x-icon">
@@ -91,6 +91,10 @@
   </head>
 
   <body>
+
+    <div style="position:absolute; font-size:10px;bottom:0px;left:0px;color:#999999;">
+       <div align="center">Traffic: {{traffic}} ip/hr</div>
+    </div>
 
     {% block nav_bar %}
         {% nav_bar user params %}

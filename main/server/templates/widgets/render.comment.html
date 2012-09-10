@@ -1,6 +1,7 @@
 {% load basic %}
 {% load humanize %}
 {% load widgets %}
+{% load url from future %}
 
 {# renders a single comment #}
 
@@ -45,7 +46,7 @@
             <a class="add-comment">reply</a>
             
         {% else %}
-            <a href="/openid/login/?next={{request.path}}">log in to reply</a>
+            <a href="/openid/login/">log in to reply</a>
         {% endif %}
 
         {# owners and moderators may edit the post #}

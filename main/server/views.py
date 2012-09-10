@@ -49,11 +49,6 @@ POST_TYPE_MAP = dict(
 
 POST_TYPE_REV_MAP = dict( [ (v,k) for (k,v) in POST_TYPE_MAP.items()] )
 
-ORDER_MAP = dict(
-    rank="-rank", views="-views", creation="-creation_date",
-    edit="lastedit_date", votes="-full_score", answers="-answer_count",
-)
-
 def mytags_posts(request):
     "Gets posts that correspond to mytags settins or sets warnings"
     user = request.user
@@ -73,6 +68,8 @@ def filter_by_type(request, posts, post_type):
     # filter is a single type
     if post_type in POST_TYPE_REV_MAP:
         return posts.filter(type=post_type)
+    elif post_type == 'sticky':
+        return posts.filter(sticky=True)
     elif post_type == 'unanswered':
         return posts.filter(type__in=[POST_QUESTION, POST_FIXME], answer_count=0)
     elif post_type == 'all':
@@ -81,45 +78,43 @@ def filter_by_type(request, posts, post_type):
         return mytags_posts(request)
     elif post_type == 'recent':
         return posts.exclude(type=POST_BLOG).select_related('author', 'author__profile','root')
-        
-    msg = html.sanitize('Unknown content type "%s" requested' % post_type)
-    messages.error(request, msg)
-    return posts.all()
-
-def apply_sort(request, posts, value):
+    
+    return posts.exclude(type__in=POST_EXCLUDE)
+    
+def apply_sort(request, posts, order, sticky=True):
     "Sorts posts by an order"
-    order = ORDER_MAP.get(value)
-    if order:
-        return posts.order_by(order)
-    
-    # default value is sort by created date
-    #print '*** default SORT %s' % value
-    
-    messages.error(request, 'Unknown sort order requested')
-    return posts.order_by('-rank')
+    sort_order = SORT_MAP.get(order, "-rank")
+    if sticky:
+        args = [ "-sticky", sort_order]
+    else:
+        args = [ sort_order ]
+    return posts.order_by(*args)
 
 # there is a tab bar and a lower "pill" bar
 
 SORT_CHOICES   = "rank,views,votes,answers,creation,edit".split(',')
 
-def index(request, target=''):
+def index(request, tab='all'):
     user = request.user
     auth = user.is_authenticated()
     
+    # asking for an invalid tab
+    if tab not in VALID_TABS:
+        msg = html.sanitize('Unknown content type "%s"' % tab)
+        messages.error(request, msg)
+        return html.redirect("/")
+        
     # populate the session data
     sess = middleware.Session(request)
     
     # get the sort order
     sort_type = sess.sort_order()
     
-    # get the active target based on history
-    tab, pill = sess.tabpill(target)
-    
-    # an override of the types
-    target = pill if pill else target
+    # set the last active tab
+    sess.set_tab(tab)
     
     # get the numerical value for these posts
-    post_type = POST_TYPE_MAP.get(target, target)
+    post_type = POST_TYPE_MAP.get(tab, tab)
     
     # override the sort order if the content so requires
     sort_type = 'creation' if tab=='recent' else sort_type
@@ -129,7 +124,12 @@ def index(request, target=''):
     
     # wether to show the type of the post
     show_type = post_type in ('all', 'recent')
-    params  = html.Params(tab=tab, pill=pill, sort=sort_type, sort_choices=SORT_CHOICES, layout=layout, show_type=show_type)
+    
+    if tab in VALID_PILLS:
+        tab, pill = "posts", tab
+    else:
+        tab, pill = tab, ""
+    params  = html.Params(tab=tab, pill=pill, sort=sort_type, sort_choices=SORT_CHOICES, layout=layout, show_type=show_type, title="Bioinformatics Answers")
     
     # this will fill in the query (q) and the match (m)parameters
     params.parse(request)
@@ -139,9 +139,12 @@ def index(request, target=''):
     
     # filter posts by type
     posts = filter_by_type(request=request, posts=posts, post_type=post_type)
+        
+    # apply the sort order, sticky is only active in the tab
+    sticky = tab not in ('posts', 'recent')
     
-    # apply the sort order
-    posts = apply_sort(request=request, posts=posts, value=sort_type)
+    # order may change if it is invalid search
+    posts = apply_sort(request=request, posts=posts, order=sort_type, sticky=sticky)
     
     # this is necessary because the planet posts require more attributes
     if tab == 'planet':
@@ -154,6 +157,14 @@ def index(request, target=''):
     # save the session
     sess.save()
    
+    # try to set a more informative title
+    title_map = dict(
+            questions="Bioinformatics Questions", unanswered="Unanswered Questions", tutorials="Bioinformatics Tutorials",
+            jobs="Bioinformatics Jobs", videos="Bioinformatics Videos", news='Bioinformatics News', tools="Bioinformatics Tools",
+            recent="Recent bioinformatics posts", planet="Bioinformatics Planet"
+    )
+    params.title = title_map.get(tab, params.title)
+    
     return html.template(request, name='index.html', page=page, params=params, counts=counts)
     
 def show_tag(request, tag_name=None):
@@ -165,29 +176,30 @@ def show_tag(request, tag_name=None):
     # get the sort order
     sort_type = sess.sort_order()
     
-    # get the active target based on history
-    tab, pill = sess.tabpill()
+    # select based on history
+    tab, pill = "posts", sess.get_tab()
     
-    params = html.Params(nav='', tab=tab, sort='')
+    params = html.Params(nav='', tab=tab, sort='' )
     
     # the params object will carry
     layout = settings.USER_PILL_BAR if auth else settings.ANON_PILL_BAR
     
     # wether to show the type of the post
-    params  = html.Params(tab=tab, pill='all', sort=sort_type, sort_choices=SORT_CHOICES, layout=layout)
+    params  = html.Params(tab=tab, pill=pill, sort=sort_type, sort_choices=SORT_CHOICES, layout=layout, title="Tagged as %s" % tag_name)
     
     msg = 'Filtering by tag: <b>%s</b>. Subscribe to an <a href="/feeds/tag/%s/">RSS feed</a> to this tag.' % (tag_name,tag_name)
     messages.info(request, msg)
     posts = models.query_by_tags(user=user, text=tag_name)
-    posts = apply_sort(request=request, posts=posts, value=sort_type)
+    posts = apply_sort(request=request, posts=posts, order=sort_type)
     page  = get_page(request, posts, per_page=20)
+
     return html.template( request, name='index.html', page=page, params=params)
 
 def show_user(request, uid, post_type=''):
     "Displays posts by a user"
 
     user = models.User.objects.filter(id=uid).select_related('profile').all()[0]
-    params = html.Params(nav='', tab='user', sort='')
+    params = html.Params(nav='', tab='user', sort='', title="Activity for user %s" % user.profile.display_name)
 
     # notification
     messages.info(request, 'Filtering by user: %s' % user.profile.display_name)
@@ -219,7 +231,7 @@ def user_profile(request, uid, tab='activity'):
     target.writeable = auth.authorize_user_edit(target=target, user=user, strict=False)
     target.showall = (target == user)
 
-    params = html.Params(tab=tab, sort='')
+    params = html.Params(tab=tab, sort='', title="User %s" % target.profile.display_name)
 
     # these do not actually get executed unless explicitly rendered in the page
     bookmarks = models.Vote.objects.filter(author=target, type=VOTE_BOOKMARK).select_related('post', 'post__author__profile').order_by('id')
@@ -271,7 +283,7 @@ def user_list(request):
     else:
         query = Q(id__gt=0)
         
-    users = models.User.objects.filter(query).select_related('profile').order_by("-profile__score")
+    users = models.User.objects.filter(query).select_related('profile').order_by("-profile__score", "id")
     page  = get_page(request, users, per_page=24)
     return html.template(request, name='user.list.html', page=page, params=params)
 
@@ -287,7 +299,7 @@ def tag_list(request):
     else:
         query = Q(id__gt=0)
         
-    tags = models.Tag.objects.filter(query).order_by('name')
+    tags = models.Tag.objects.filter(query).order_by('-count')
     page = get_page(request, tags, per_page=152)
     params = html.Params(nav='tags', sort='')
     return html.template(request, name='tag.list.html', page=page, params=params)
@@ -314,7 +326,8 @@ def post_show(request, pid):
 
     # populate the session data
     sess = middleware.Session(request)
-    tab, pill = sess.tabpill() # get last visited values
+    tab  = "posts"
+    pill = sess.get_tab()
     
     auth = user.is_authenticated()
     layout = settings.USER_PILL_BAR if auth else settings.ANON_PILL_BAR
@@ -407,7 +420,8 @@ def new_post(request, pid=0, post_type=POST_QUESTION, tag_name=None):
     with transaction.commit_on_success():
         post = models.Post.objects.create(**params)
         post.set_tags()
-        post.save()
+        #post.save()
+
     return redirect(post)
 
 @login_required(redirect_field_name='/openid/login/')
@@ -462,13 +476,18 @@ def post_redirect(request, pid):
     post = models.Post.objects.get(id=pid)
     return html.redirect( post.get_absolute_url() )
 
-def blog_redirect(request, pid):
-    "Used to be able to count the views for a blog"
-    blog = models.Post.objects.get(id=pid, type=POST_BLOG)
-    models.update_post_views(post=blog, request=request)
-    blog.set_rank()
-    blog.save()
-    return html.redirect( blog.get_absolute_url() )
+def linkout(request, pid):
+    "Used to be able to count the views for a linkout"
+    post = models.Post.objects.get(id=pid)
+    models.update_post_views(post=post, request=request)
+    post.set_rank()
+    post.save()
+    if post.url:
+        return html.redirect(post.url)    
+    else:
+        message.error(request, 'linkout used on a post with no url set %s' % post.id)
+        return html.redirect("/")  
+    
 
 def modlog_list(request):
     "Lists of all moderator actions"

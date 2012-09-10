@@ -15,11 +15,11 @@ class Session(object):
     saves all at just one time. It also works for non-authenticated users but avoids
     creating a database sessions for them
     """
-    SESSION_KEY, SORT_KEY, COUNT_KEY, TAB, PILL = "session-data", 'sort', 'count', 'tab', 'pill'
+    SESSION_KEY, SORT_KEY, COUNT_KEY, TAB = "session-data", 'sortz', 'count', 'tabz'
     def __init__(self, request):
         self.request = request
         self.has_storage = request.user.is_authenticated()
-        default = { self.COUNT_KEY:{ }, self.SORT_KEY:"rank", self.TAB:"posts", self.PILL:"all" }
+        default = { self.COUNT_KEY:{ }, self.SORT_KEY:"rank", self.TAB:"all"}
         if self.has_storage:
             self.data = self.request.session.get(self.SESSION_KEY, default )
         else:
@@ -29,47 +29,20 @@ class Session(object):
         "Saves the counts back to the session"
         if self.has_storage:
             self.request.session[self.SESSION_KEY] = self.data
-             
-    def tabpill(self, value=None):
-        "Facilitates navigation by remebering the last visited tab and pill"
-        
-        # these are the old values
-        otab, opill = self.data[self.TAB], self.data[self.PILL]
-     
-        # nothing specified, keep the old values
-        if not value:
-            return(otab, opill)
-        
-        # the tab must always be set
+    
+    def set_tab(self, value):
         self.data[self.TAB] = value
         
-        # requesting the post tab, select and return the last pill
-        if value == "posts":
-            return (value, opill)
-            
-        # a valid tab other than posts
-        elif value in VALID_TABS:
-            return (value, "")
-            
-        # request for a valid pill link
-        elif value in VALID_PILLS:
-            tab, pill = "posts", value
-        
-        # navigation error
-        else:
-            tab, pill = "posts", "unkown"
-            
-        # only set the pill when a valid PILL request comes in
-        self.data[self.TAB]  = tab
-        self.data[self.PILL] = pill
-       
-        return tab, pill
+    def get_tab(self, value=None):
+        "Facilitates navigation by remebering the last visited url"    
+        return self.data[self.TAB]
     
     def sort_order(self):
         "Stores the last sort order in the session"
         value = self.request.GET.get('sort', '').lower()
-        last  = self.data.get(self.SORT_KEY, '')
-        value = value or last
+        value = value or self.data.get(self.SORT_KEY)
+        if value not in SORT_MAP:
+            value = "rank"
         self.data[self.SORT_KEY] = value
         return value
 
@@ -84,7 +57,7 @@ class Session(object):
             self.data[self.COUNT_KEY][key] = 0
             return self.data[self.COUNT_KEY]
             
-def generate_counts(request, weeks=5):
+def generate_counts(request, weeks=6):
     "Returns the number of counts for each post type in the interval that has passed"
     user = request.user
     now  = datetime.now()
@@ -97,7 +70,7 @@ def generate_counts(request, weeks=5):
         if counts:
             return counts
         since = now - timedelta(weeks=weeks)
-    
+
     # posts since the last visit
     pairs = models.Post.objects.filter(type__in=POST_TOPLEVEL, status=POST_OPEN, creation_date__gt=since).order_by('-id').values_list("type", "answer_count")
     
@@ -151,7 +124,7 @@ class LastVisit(object):
         
         # only write to database intermittently
         expired = (datetime.now() - profile.last_visited).seconds
-        
+            
         if expired > settings.SESSION_UPDATE_TIME:
             counts = generate_counts(request)
             sess.set_counts(counts)
@@ -166,6 +139,14 @@ class LastVisit(object):
                 first = fixme[0]
                 messages.error(request, 'You have a post that does not conform the requirements. Please edit it: <a href="%s">%s</a>' % (first.get_absolute_url(), first.title)) 
 
+            # remind user about voting every six weeks since the last vote
+            # and only nag people with lower reputations ;-)
+            if user.profile.score < 300:
+                since = datetime.now() - timedelta(weeks=6)
+                votes = models.Vote.objects.filter(author=user, date__gt=since)[:1]
+                if not votes:
+                    messages.info(request, '<i class="icon-info-sign"></i> Remember to <b>vote</b> on posts that you find useful!') 
+                
             # try to award badges
             awards.instant(request)
 

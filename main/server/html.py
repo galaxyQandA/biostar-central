@@ -4,11 +4,11 @@ Html utility functions.
 import re, string, mimetypes, os, json, random, hashlib,  unittest
 from django.template import RequestContext, loader
 from django.core.servers.basehttp import FileWrapper
-from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import render_to_response
+from django.http import HttpResponse, HttpResponseRedirect, HttpResponsePermanentRedirect, Http404
+from django.shortcuts import render_to_response, render
 from django.core.context_processors import csrf
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
-
+from django.template.loader import render_to_string
 from BeautifulSoup import BeautifulSoup, Comment
 
 import html5lib
@@ -21,10 +21,14 @@ from docutils import core
 import docutils.parsers.rst.roles
 docutils.parsers.rst.roles.DEFAULT_INTERPRETED_ROLE = 'title-reference'
 from itertools import groupby
+from textparser import process
 
 # safe string transformation
 import string
 SAFE_TAG = set(string.ascii_letters + string.digits + "._-")
+
+def raise404():
+    raise Http404
 
 def safe_tag(text):
     global SAFE_TAG
@@ -72,19 +76,25 @@ def generate(text):
         html = rest.get('html_body','[rest error]')
     else:
         md = markdown2.Markdown( safe_mode=False )
-        text = fix_orphans(text)
+        #text = fix_orphans(text)
+        text = process(text, state='pre')
         html = md.convert(text)
         html = sanitize(html)
-        html = extra_html(html)
+        html = process(html, state='post')
+        #html = extra_html(html)
     return html
 
 orphans = re.compile("(^|[\w:.]\s)((https?|ftp):\S+) ", re.MULTILINE | re.VERBOSE)
 def fix_orphans(text):
     global orphans
     "Add markdown to orphan links"
-    text = orphans.sub(r'\1<\2>', text)
-    return text
-
+    collect = []
+    for line in text.splitlines():
+        if not line.startswith("    "):    
+            line = orphans.sub(r'\1<\2>', line)
+        collect.append(line)
+    return "\n".join(collect)
+    
 youtube = re.compile("youtube:([_\w-]+) ", re.MULTILINE | re.VERBOSE)
 def extra_html(text):
     "Allows embedding extra html features"
@@ -174,15 +184,24 @@ def json_response(adict, **kwd):
     """Returns a http response in JSON format from a dictionary"""
     return HttpResponse(json.dumps(adict), **kwd)
 
-def redirect(url):
+def redirect(url, permanent=False):
     "Redirects to a url"
-    return HttpResponseRedirect(url)
+    if permanent:
+        return HttpResponsePermanentRedirect(url)
+    else:
+        return HttpResponseRedirect(url)
 
 def template(request, name, mimetype=None, **kwd):
     """Renders a template and returns it as an http response"""
     # parameters that will always be available for the template
     kwd['request'] = request
     resp = render_to_response(name, kwd, context_instance=RequestContext(request))
+    return resp
+
+def fill(name, **kwd):
+    """Renders a template into a string"""
+    # parameters that will always be available for the template
+    resp = render_to_string(name, kwd)
     return resp
 
 def get_ip(request):
@@ -215,12 +234,9 @@ def hot(ups, downs, date):
 def rank(post):
     "Computes the rank of a post"
     
-    # rank all negativly scored posts at creation level
-    if post.full_score < 0:
-        ups = 1
-    else:
-        ups = int(post.full_score + post.views/25.0) + 1
-        
+    # Biostar tweaks to the reddit scoring
+    ups = max((post.full_score, 0)) + 1
+    ups = int(ups + post.views/25.0)
     downs = 0
     rank = hot(ups, downs, post.creation_date)
     return rank

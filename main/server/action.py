@@ -4,7 +4,7 @@ Too many viewa in the main views.py
 Started refactoring some here, this will eventually store all form based
 actions whereas the main views.py will contain url based actions.
 """
-import os, sys, traceback
+import os, sys, traceback, time
 
 from datetime import datetime, timedelta
 from main.server import html, models, auth, notegen
@@ -22,6 +22,7 @@ from django.db.models import Q
 from django.contrib import messages
 from django.core.urlresolvers import reverse
 from django.core.mail import send_mail
+from django.utils import simplejson
 
 from whoosh import index
 from whoosh.qparser import QueryParser
@@ -126,6 +127,52 @@ def user_edit(request, uid):
             
             url = reverse('main.server.views.user_profile', kwargs=dict(uid=target.id))
             return html.redirect(url)
+
+@login_required(redirect_field_name='/openid/login/')
+def post_reparent(request, pid, rid=0):
+    "Reparent a post"
+    
+    post = models.Post.objects.get(id=pid)
+    root = post.root
+    parent = post.parent
+
+    allow = auth.authorize_post_edit(post=post, user=request.user, strict=False)
+    
+    if not allow:
+        messages.error(request, "Reparent access denied")
+        return html.redirect(post.get_absolute_url())
+
+    if post.type in POST_TOPLEVEL or post == post.root:
+        messages.error(request, "Cannot reparent a toplevel post")
+        return html.redirect(post.get_absolute_url())
+
+    # these are the valid targets
+    targets = models.Post.objects.filter(root=root).select_related('author', 'author__profile').exclude(id__in=(post.id, parent.id))
+
+    target = request.REQUEST.get('target')
+    if target:
+        target =  models.Post.objects.get(id=target)
+        
+        if target not in targets:
+            messages.error(request, "Invalid reparent %s -> %s" % (post.id, target.id) )
+            return html.redirect(post.get_absolute_url())
+        
+        # comment to comment reparent is not yet supported
+        if target.type == POST_COMMENT and post.type == POST_COMMENT:
+            messages.error(request, "Comment to comment reparent %s -> %s not implemented" % (post.id, target.id) )
+            return html.redirect(post.get_absolute_url())
+
+        # perfomr the reparent
+        post.parent = target
+        question = (target.type == POST_QUESTION)
+        post.type = POST_ANSWER if question else POST_COMMENT
+        post.save()
+
+        # valid target to be applied
+        messages.info(request, "Reparenting %s to %s" % (post.id, target.id))
+        return html.redirect(post.get_absolute_url())
+        
+    return html.template(request, name='post.reparent.html', post=post, targets=targets)
 
 def badge_show(request, bid):
     "Shows users that have earned a certain badge"
@@ -272,7 +319,48 @@ def test_login(request, uid, token):
         messages.error(request, "Test login failed.")
         
     return html.redirect("/")   
-     
+
+def get_traffic(end, minutes=60):
+    "Returns the traffic as a number"
+    try:
+        start = end - timedelta(minutes=minutes)
+        traffic = models.PostView.objects.filter(date__gt=start).exclude(date__gt=end).distinct('ip').count()
+    except NotImplementedError, exc:
+        traffic = models.PostView.objects.filter(date__gt=start).exclude(date__gt=end).count()
+    return traffic
+
+def traffic(request):
+    now = datetime.now()
+    minutes = 60;
+    data = {
+        'date': now.ctime(),
+        'timestamp': time.mktime(now.timetuple()),
+        'traffic': get_traffic(now, minutes=minutes),
+    }
+    payload = simplejson.dumps(data)
+    return HttpResponse(payload)
+
+def stats(request, days=0):
+    "This return a json data about biostar"
+
+    now = datetime.now()
+    end = now - timedelta(days=int(days))
+
+    query = models.Post.objects.filter
+    minutes = 60;
+    data = {
+        'date': end.ctime(),
+        'timestamp': time.mktime(end.timetuple()),
+        'questions': query(type=POST_QUESTION, creation_date__lt=end).count(),
+        'answers': query(type=POST_ANSWER, creation_date__lt=end).count(),
+        'toplevel': query(type__in=POST_TOPLEVEL, creation_date__lt=end).exclude(type=POST_BLOG).count(),
+        'comments': query(type=POST_COMMENT, creation_date__lt=end).count(),
+        'votes':  models.Vote.objects.filter(date__lt=end).count(),
+        'users': models.User.objects.filter(date_joined__lt=end).count(),
+    }
+    payload = simplejson.dumps(data)
+    return HttpResponse(payload)    
+    
 def url500(request):
     "Custom error handler"
     
@@ -296,14 +384,14 @@ def redirect_post(request, pid):
     try:
         nid = REMAP[pid]
         post = models.Post.objects.get(id=nid)
-        return html.redirect(post.get_absolute_url())   
+        return html.redirect(post.get_absolute_url(), permanent=True)   
     except Exception, exc:
         messages.error(request, "Unable to redirect: %s" % exc)
         return html.redirect("/")
         
 def redirect_tag(request, tag):
     try:
-        return html.redirect("/show/tag/%s/" % tag)   
+        return html.redirect("/show/tag/%s/" % tag, permanent=True)   
     except Exception, exc:
         messages.error(request, "Unable to redirect: %s" % exc)
         return html.redirect("/")   

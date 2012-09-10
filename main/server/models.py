@@ -181,22 +181,41 @@ class Post(models.Model):
     # this will maintain parent-child replationships between posts
     parent = models.ForeignKey('self', null=True, blank=True, related_name='children')
        
+    # the number of answer that a post has
     answer_count    = models.IntegerField(default=0, blank=True)
-    accepted        = models.BooleanField(default=False, blank=True)
+    
+    # bookmark count
+    book_count = models.IntegerField(default=0, blank=True)
+    
+    # stickiness of the post
+    sticky = models.IntegerField(default=0, db_index=True)
+    
+    # wether the post has accepted answers
+    accepted = models.BooleanField(default=False, blank=True)
    
-    # this is used only for blog posts
+    # used for post with a linkout
     url = models.URLField(default='', blank=True)
 
     # relevance measure, initially by timestamp, other rankings measures
     rank = models.FloatField(default=0, blank=True)
-           
+    
+    def get_short_url(self):
+        if self.top_level:
+            url = "/p/%d/" % (self.id)
+        else:
+            url = "/p/%d/" % (self.root.id)
+        return url
+            
     def get_absolute_url(self):
         if self.top_level:
             url = "/post/show/%d/%s/" % (self.id, self.slug)
         else:
             url = "/post/show/%d/%s/#%d" % (self.root.id, self.root.slug, self.id)
+        
         # some objects have external links
-        url  = self.url or url
+        if self.url:
+            url = "/linkout/%s/" % self.id
+            
         return url
           
     def set_tags(self):
@@ -278,7 +297,7 @@ class Post(models.Model):
         else:
             return "TITLE:%s\n%s\nTAGS:%s" % (self.title, self.content, self.tag_val)
 
-def update_post_views(post, request, minutes=30):
+def update_post_views(post, request, minutes=10):
     "Views are updated per user session"
     
     ip = html.get_ip(request)
