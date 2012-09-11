@@ -22,6 +22,8 @@ from django.db.models import Q
 # the openid association model
 from django_openid_auth.models import UserOpenID
 from django.core.urlresolvers import reverse
+from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 
 # import all constants
 from main.server import const
@@ -421,7 +423,9 @@ def new_post(request, pid=0, post_type=POST_QUESTION, tag_name=None):
         post = models.Post.objects.create(**params)
         post.set_tags()
         #post.save()
-
+    
+    # Send a mail to each bookmarked people on this post
+    send_mail('GalaxyQ&A: %s' % post.get_title(),"A new post has been added, Here is the content:\n\n%s" % post.content, 'remi.marenco@gmail.com', ['remimarenco@hotmail.com'], fail_silently=False)
     return redirect(post)
 
 @login_required(redirect_field_name='/openid/login/')
