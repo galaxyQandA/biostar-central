@@ -425,7 +425,16 @@ def new_post(request, pid=0, post_type=POST_QUESTION, tag_name=None):
         #post.save()
     
     # Send a mail to each bookmarked people on this post
-    send_mail('GalaxyQ&A: %s' % post.get_title(),"A new post has been added, Here is the content:\n\n%s" % post.content, 'remi.marenco@gmail.com', ['remimarenco@hotmail.com'], fail_silently=False)
+
+    # First: Get the root id of the post
+    post_root_id = post.root_id
+    # Then: Get all the post_ids where root_id is the root
+    posts_root_related = models.Post.objects.filter(root_id=post_root_id)
+    # Then: Look in server_vote, if post_id==one of the post_ids and type==4, then, verify if it author_id does not already exist and  add the author_id to the list
+    authors_id_related = models.Vote.objects.filter(post_id__in=posts_root_related, type=4).values_list('author_id', flat=True).distinct()
+    # Then: Get all the email address from auth_user where author_id match, and put the email field in mail_list
+    emails = models.User.objects.filter(id__in=authors_id_related).values_list('email', flat=True)
+    send_mail('GalaxyQ&A: %s' % post.get_title(),"A new post has been added, Here is the content:\n\n%s" % post.content, 'remi.marenco@gmail.com', emails, fail_silently=False)
     return redirect(post)
 
 @login_required(redirect_field_name='/openid/login/')
