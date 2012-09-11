@@ -438,8 +438,12 @@ def new_post(request, pid=0, post_type=POST_QUESTION, tag_name=None):
     # Then: Get all the email address from auth_user where author_id match, and put the email field in mail_list
     emails = models.User.objects.filter(id__in=authors_id_related).values_list('email', flat=True)
     
-    send_mail('GalaxyQ&A: %s' % post.get_title(),"A new post has been added, Here is the content:\n\n%s" % post.content, 'remi.marenco@gmail.com', emails, fail_silently=False)
+    # send_mail('GalaxyQ&A: %s' % post.get_title(),"A new post has been added, Here is the content:\n\n%s" % post.content, 'remi.marenco@gmail.com', emails, fail_silently=False)
     
+    email = EmailMessage('GalaxyQ&A: %s' % post.get_title(), 'A new post has been added, Here is the content:\n\n%s' % post.content, 'remi.marenco@gmail.com',[], emails,)
+
+    email.send(fail_silently=False)    
+ 
     return redirect(post)
 
 @login_required(redirect_field_name='/openid/login/')
