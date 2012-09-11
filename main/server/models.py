@@ -230,7 +230,7 @@ class Post(models.Model):
         "Returns the title and a qualifier"
         title = self.title
         if self.deleted:
-            title = "%s [deleted ]" % self.title
+            title = "%s [deleted]" % self.title
         elif self.closed:
             title = "%s [closed]" % self.title
         return "%s" % title
