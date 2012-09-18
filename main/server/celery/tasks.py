@@ -3,7 +3,7 @@ from main.server import models
 from django.core.mail import EmailMessage
 
 @task(name='remi_task')
-def add(post):
+def send_mail_bookmarked(post):
     # First: Get the root id of the post
     post_root_id = post.root_id
 
